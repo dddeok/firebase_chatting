@@ -3,22 +3,37 @@ package com.example.firebase_chat2;
 import androidx.annotation.NonNull;
 import androidx.annotation.Nullable;
 import androidx.appcompat.app.AppCompatActivity;
+import androidx.fragment.app.Fragment;
+import androidx.fragment.app.FragmentManager;
+import androidx.fragment.app.FragmentPagerAdapter;
+import androidx.viewpager.widget.ViewPager;
 
+import android.content.Intent;
 import android.os.Bundle;
 import android.text.TextUtils;
 import android.view.View;
+import android.widget.Button;
 import android.widget.EditText;
 import android.widget.ListView;
+import android.widget.TextView;
 
+import com.example.firebase_chat2.Fragment.ChatFragment;
+import com.example.firebase_chat2.Fragment.UserFragment;
+import com.example.firebase_chat2.Model.User;
+import com.google.android.material.tabs.TabLayout;
+import com.google.firebase.auth.FirebaseAuth;
+import com.google.firebase.auth.FirebaseUser;
 import com.google.firebase.database.ChildEventListener;
 import com.google.firebase.database.DataSnapshot;
 import com.google.firebase.database.DatabaseError;
 import com.google.firebase.database.DatabaseReference;
 import com.google.firebase.database.FirebaseDatabase;
+import com.google.firebase.database.ValueEventListener;
 
+import java.util.ArrayList;
 import java.util.Random;
 
-public class MainActivity extends AppCompatActivity implements View.OnClickListener {
+public class MainActivity extends AppCompatActivity{
 
     private ListView mListView;
     private EditText mEditmsg;
@@ -28,82 +43,86 @@ public class MainActivity extends AppCompatActivity implements View.OnClickListe
     private ChatAdapter mAdapter;
     private String userName;
 
+    TextView txt_userName;
+    Button btn_logout;
+    FirebaseUser firebaFirebaseUser;
+    DatabaseReference reference;
+
     @Override
     protected void onCreate(Bundle savedInstanceState) {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
-        initView();
-        initFirebaseDB();
-        initValue();
-        
-        
-    }
+        txt_userName = (TextView) findViewById(R.id.username);
+        btn_logout = (Button) findViewById(R.id.btn_logout);
 
-    private void initValue() {
-        userName = "Guest" + new Random().nextInt(5000);
-    }
+        firebaFirebaseUser = FirebaseAuth.getInstance().getCurrentUser();
+        reference = FirebaseDatabase.getInstance().getReference("Users").child(firebaFirebaseUser.getUid());
 
-    private void initFirebaseDB() {
-        mFirebaseDB = FirebaseDatabase.getInstance() ;
-        mDataReference = mFirebaseDB.getReference("message");
-        mChildEventListener = new ChildEventListener() {
+        reference.addValueEventListener(new ValueEventListener() {
             @Override
-            public void onChildAdded(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
-                ChatData chatData = dataSnapshot.getValue(ChatData.class);
-                chatData.firebaseKey = dataSnapshot.getKey();
-                mAdapter.add(chatData);
-                mListView.smoothScrollToPosition(mAdapter.getCount());
-            }
-
-            @Override
-            public void onChildChanged(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
-
-            }
-
-            @Override
-            public void onChildRemoved(@NonNull DataSnapshot dataSnapshot) {
-                String firebaseKey = dataSnapshot.getKey();
-                int count = mAdapter.getCount();
-                for (int i=0; i<count; i++){
-                    if(mAdapter.getItem(i).firebaseKey.equals(firebaseKey)){
-                        mAdapter.remove(mAdapter.getItem(i));
-                        break;
-                    }
-                }
-            }
-
-            @Override
-            public void onChildMoved(@NonNull DataSnapshot dataSnapshot, @Nullable String s) {
-
+            public void onDataChange(@NonNull DataSnapshot dataSnapshot) {
+                User user  = dataSnapshot.getValue(User.class);
+                txt_userName.setText(user.getUsername());
             }
 
             @Override
             public void onCancelled(@NonNull DatabaseError databaseError) {
 
             }
-        };
-        mDataReference.addChildEventListener(mChildEventListener);
+        });
+
+        btn_logout.setOnClickListener(new View.OnClickListener() {
+            @Override
+            public void onClick(View v) {
+                FirebaseAuth.getInstance().signOut();
+                startActivity(new Intent(MainActivity.this, StartActivity.class));
+                finish();
+            }
+        });
+        TabLayout tabLayout = (TabLayout)findViewById(R.id.tab_layout);
+        ViewPager viewPager = (ViewPager)findViewById(R.id.view_pager);
+
+        ViewPagerAdapter viewPagerAdapter = new ViewPagerAdapter(getSupportFragmentManager());
+        viewPagerAdapter.addFragment(new ChatFragment(), "Chats");
+        viewPagerAdapter.addFragment(new UserFragment(), "Users");
+
+        viewPager.setAdapter(viewPagerAdapter);
+
+        tabLayout.setupWithViewPager(viewPager);
     }
 
-    private void initView() {
-        mListView = (ListView) findViewById(R.id.list_msg);
-        mAdapter = new ChatAdapter(this, R.layout.listitem_chat);
-        mListView.setAdapter(mAdapter);
-        mEditmsg = (EditText)findViewById(R.id.edit_msg);
-        findViewById(R.id.btn_send).setOnClickListener(this);
-    }
+    class ViewPagerAdapter extends FragmentPagerAdapter{
 
-    @Override
-    public void onClick(View v) {
-        String message = mEditmsg.getText().toString();
-        if(!TextUtils.isEmpty(message)){
-            mEditmsg.setText("");
-            ChatData chatData = new ChatData();
-            chatData.userName = userName;
-            chatData.message = message;
-            chatData.time = System.currentTimeMillis();
-            mDataReference.push().setValue(chatData);
+        private ArrayList<Fragment> fragments;
+        private ArrayList<String> titles;
+
+        ViewPagerAdapter(FragmentManager fm){
+            super(fm);
+            this.fragments = new ArrayList<>();
+            this.titles = new ArrayList<>();
+
+        }
+
+        @Override
+        public Fragment getItem(int position) {
+            return fragments.get(position);
+        }
+
+        @Override
+        public int getCount() {
+            return fragments.size();
+        }
+
+        public void addFragment(Fragment fragment, String title){
+            fragments.add(fragment);
+            titles.add(title);
+        }
+
+        @Nullable
+        @Override
+        public CharSequence getPageTitle(int position) {
+            return titles.get(position);
         }
     }
 }
